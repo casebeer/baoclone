@@ -35,6 +35,10 @@
 
 #define NCHAN 128
 
+// n.b. This is in MHz, comuputed based on the MHz -> BCD conversion in setup_channel().
+//      That's unnecessary; any value above the valid frequency range will work.
+#define TX_DISABLE_MHZ 1666.666645
+
 static const char *PTTID_NAME[] = { "-", "Begin", "End", "Both" };
 
 static const char *STEP_NAME[] = { "2.5",  "5.0",  "6.25", "10.0",
@@ -95,6 +99,19 @@ static void aged_print_version (FILE *out)
 {
     // Nothing to print.
 }
+
+//
+// Check that the radio does support this frequency.
+//
+static int is_valid_frequency (int mhz)
+{
+    if (mhz >= 136 && mhz <= 174)
+        return 1;
+    if (mhz >= 400 && mhz <= 520)
+        return 1;
+    return 0;
+}
+
 
 //
 // Read block of data, up to 64 bytes.
@@ -374,7 +391,14 @@ static void setup_channel (int i, char *name, double rx_mhz, double tx_mhz,
     memory_channel_t *ch = i + (memory_channel_t*) radio_mem;
 
     ch->rxfreq = int_to_bcd ((int) (rx_mhz * 100000.0 + 0.5));
-    ch->txfreq = int_to_bcd ((int) (tx_mhz * 100000.0 + 0.5));
+
+    if (is_valid_frequency (tx_mhz)) {
+        ch->txfreq = int_to_bcd ((int) (tx_mhz * 100000.0 + 0.5));
+    } else {
+        // disable TX
+        ch->txfreq = 0xffffffff;
+    }
+
     ch->rxtone = rq;
     ch->txtone = tq;
     ch->lowpower = lowpower;
@@ -1145,18 +1169,6 @@ static int uv5r_parse_header (char *line)
 }
 
 //
-// Check that the radio does support this frequency.
-//
-static int is_valid_frequency (int mhz)
-{
-    if (mhz >= 136 && mhz <= 174)
-        return 1;
-    if (mhz >= 400 && mhz <= 520)
-        return 1;
-    return 0;
-}
-
-//
 // Parse one row in the Channels table.
 // Return 0 on failure.
 // Channel Name    Receive  TxOffset R-Squel T-Squel Power FM     Scan BCL ID6 PTTID
@@ -1187,7 +1199,10 @@ static int parse_channel (int first_row, char *line)
         fprintf (stderr, "Bad receive frequency.\n");
         return 0;
     }
-    if (sscanf (offset_str, "%lf", &txoff_mhz) != 1 ||
+    if (strcmp("-", offset_str) == 0) {
+        // tx disabled; set offset outside range so setup_channel will disable it.
+        txoff_mhz = TX_DISABLE_MHZ;
+    } else if (sscanf (offset_str, "%lf", &txoff_mhz) != 1 ||
         ! is_valid_frequency (rx_mhz + txoff_mhz))
     {
         fprintf (stderr, "Bad transmit offset.\n");
