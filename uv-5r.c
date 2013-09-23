@@ -34,10 +34,7 @@
 #include "util.h"
 
 #define NCHAN 128
-
-// n.b. This is in MHz, comuputed based on the MHz -> BCD conversion in setup_channel().
-//      That's unnecessary; any value above the valid frequency range will work.
-#define TX_DISABLE_MHZ 1666.666645
+#define TX_DISABLED_HZ 1666666650
 
 static const char *PTTID_NAME[] = { "-", "Begin", "End", "Both" };
 
@@ -704,7 +701,7 @@ static void print_config (FILE *out, int verbose, int is_aged)
         fprintf (out, "# 1) Channel number: 0-%d\n", NCHAN-1);
         fprintf (out, "# 2) Name: up to 7 characters, no spaces\n");
         fprintf (out, "# 3) Receive frequency in MHz\n");
-        fprintf (out, "# 4) Offset of transmit frequency in MHz\n");
+        fprintf (out, "# 4) Offset of transmit frequency in MHz, or '-' to disable transmit\n");
         fprintf (out, "# 5) Squelch tone for receive, or '-' to disable\n");
         fprintf (out, "# 6) Squelch tone for transmit, or '-' to disable\n");
         fprintf (out, "# 7) Transmit power: Low, High\n");
@@ -729,7 +726,13 @@ static void print_config (FILE *out, int verbose, int is_aged)
         }
 
         fprintf (out, "%5d   %-7s %8.4f ", i, name, rx_hz / 1000000.0);
-        print_offset (out, tx_hz - rx_hz);
+
+        if (tx_hz == TX_DISABLED_HZ) {
+            fprintf (out, " -      ");
+        } else {
+            print_offset (out, tx_hz - rx_hz);
+        }
+
         fprintf (out, " ");
         print_squelch (out, rx_ctcs, rx_dcs);
         fprintf (out, "   ");
@@ -1201,7 +1204,7 @@ static int parse_channel (int first_row, char *line)
     }
     if (strcmp("-", offset_str) == 0) {
         // tx disabled; set offset outside range so setup_channel will disable it.
-        txoff_mhz = TX_DISABLE_MHZ;
+        txoff_mhz = TX_DISABLED_HZ / 1000000.0;
     } else if (sscanf (offset_str, "%lf", &txoff_mhz) != 1 ||
         ! is_valid_frequency (rx_mhz + txoff_mhz))
     {
