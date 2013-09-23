@@ -704,7 +704,7 @@ static void print_config (FILE *out, int verbose, int is_aged)
             continue;
         }
 
-        fprintf (out, "%5d   %-7s %8.4f ", i, name, rx_hz / 1000000.0);
+        fprintf (out, "%5d   %-7s %8.4f ", i, ((strcmp("", name) == 0) ? "-" : name), rx_hz / 1000000.0);
         print_offset (out, tx_hz - rx_hz);
         fprintf (out, " ");
         print_squelch (out, rx_ctcs, rx_dcs);
@@ -1180,6 +1180,10 @@ static int parse_channel (int first_row, char *line)
     if (num < 0 || num >= NCHAN) {
         fprintf (stderr, "Bad channel number.\n");
         return 0;
+    }
+    if (strcmp("-", name_str) == 0) {
+        // empty channel name
+        strncpy(name_str, "", 1);
     }
     if (sscanf (rxfreq_str, "%lf", &rx_mhz) != 1 ||
         ! is_valid_frequency (rx_mhz))
